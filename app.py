@@ -1,46 +1,33 @@
 import streamlit as st
+import openai
 from pathlib import Path
-import subprocess
 
-st.title("🎙️ VoiceCloningTool")
+st.title("🎙️ VoiceCloningTool (OpenAI TTS)")
 
-# Create folders
-uploads_path = Path("uploads")
-output_path = Path("output")
-uploads_path.mkdir(exist_ok=True)
-output_path.mkdir(exist_ok=True)
+# Load key from Streamlit Secrets
+openai.api_key = st.secrets["OPENAI_API_KEY"]
 
-# Step 1: Upload sample voice
-voice_file = st.file_uploader("📂 Upload your voice sample (min 5 mins, MP3/WAV)", type=["mp3", "wav"])
+# Upload sample voice (saved but not used by OpenAI yet)
+voice_file = st.file_uploader("📂 Upload your voice sample (MP3/WAV)", type=["mp3", "wav"])
 
-# Step 2: Enter text
-text = st.text_area("✍️ Enter text you want spoken in your cloned voice")
+# Enter text
+text = st.text_area("✍️ Enter text you want spoken")
 
-# Step 3: Generate audio
-if st.button("🎤 Generate Cloned Audio"):
-    if not voice_file:
-        st.error("Please upload a voice sample first.")
-    elif not text.strip():
+if st.button("🎤 Generate Audio"):
+    if not text.strip():
         st.error("Please enter some text.")
     else:
-        # Save uploaded file
-        file_path = uploads_path / "voice_sample.mp3"
-        with open(file_path, "wb") as f:
-            f.write(voice_file.read())
+        out_file = Path("output.mp3")
 
-        # Output file path
-        out_file = output_path / "output.wav"
+        # Generate narration using OpenAI TTS
+        with openai.audio.speech.with_streaming_response.create(
+            model="gpt-4o-mini-tts",
+            voice="sage",   # alloy, verse, sage, shimmer
+            input=text
+        ) as response:
+            response.stream_to_file(out_file)
 
-        # Run Coqui TTS command
-        subprocess.run([
-            "tts", 
-            "--model_name", "tts_models/multilingual/multi-dataset/your_tts",
-            "--speaker_wav", str(file_path),
-            "--text", text,
-            "--out_path", str(out_file)
-        ])
-
-        # Play & download result
-        audio_bytes = open(out_file, "rb").read()
-        st.audio(audio_bytes, format="audio/wav")
-        st.download_button("⬇️ Download Cloned Audio", audio_bytes, file_name="cloned_voice.wav")
+        # Play & download
+        st.audio(str(out_file))
+        with open(out_file, "rb") as f:
+            st.download_button("⬇️ Download Audio", f, file_name="output.mp3")
